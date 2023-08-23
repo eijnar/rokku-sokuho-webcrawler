@@ -22,7 +22,8 @@ You need to provide email settings in the `email_settings {}` bracket. The usern
 
 Remember to change the `recipient_email` to the adress you would like to have the mail delivered.
 
-*Currently only SSL accepting smtp servers are supported*
+_Currently only SSL accepting smtp servers are supported_
+
 
 ### Systemd
 In order to run this at intervals i've included a sample systemd timer setting. You will need to change this to your particular setup. I will add instructions for this later, i might also add a bash script for some systems to do the installation
