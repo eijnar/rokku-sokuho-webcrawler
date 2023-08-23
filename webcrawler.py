@@ -202,10 +202,10 @@ if __name__ == "__main__":
 
     email_config = {
         # Email configuration
-        'custom_sender_email': 'eijnar@fastmail.com',
-        'sender_password': 'z8bsc3l6dkewwyfj',
-        'recipient_email': 'test@kaffesump.se',
-        'smtp_server': 'smtp.fastmail.com',  # Update for your email provider
+        'custom_sender_email': 'email@domain.com',
+        'sender_password': 'password_of_importance',
+        'recipient_email': 'reciever_of_news@domain.com',
+        'smtp_server': 'smtp.domain.com',  # Update for your email provider
         'smtp_port': 465,  # Update for your email provider
     }
 
