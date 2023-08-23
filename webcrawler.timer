@@ -1,0 +1,9 @@
+[Unit]
+Description=Rokku-Sokuho Webcrawler service
+
+[Timer]
+OnUnitActiveSec=12h
+Unit=webcrawler.service
+
+[Install]
+WantedBy=timers.target
