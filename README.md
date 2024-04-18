@@ -4,14 +4,31 @@ A simple webcrawler looking for changes in urls every 12 hours and emailing a li
 The webcrawler is a very tool that checks the html source code of the provided files, hashes them and saves it to the database, the next time the tool checks the current hash with the previous and if it differs adds the url to a list and then emails the list to an email address
 
 ## Installation
-Currently you need to create your own environment for the script, this can be done by running `python -m venv .venv`.
+First you need to add two .env files. One in the frontend directory and one in the webcrawler.
 
-Enter the new virtual environment by running `source .venv/bin/activate` and install the requirements with `pip install -r requirements.txt`
+Frontend only needs `DATABASE_URL`. Currently only postgresql is supported but install any driver and setup this as you like
 
-After that you should be able to run both the crawler and the flask-frontend.
+Webcrawler needs a bit more:
+```bash
+DB_USER=
+DB_PASSWORD=
+DB_NAME=
+DB_HOST=
+DB_PORT=
 
+MAIL_SENDER=
+MAIL_PASSWORD=
+MAIL_TO=
+MAIL_SMTP=
+MAIL_PORT=
+```
 
+After this you should be able to run the `install.sh` script (untested on a real linux machine when writing). 
 
 
 ### Systemd
-In order to run this at intervals i've included a sample systemd timer setting. You will need to change this to your particular setup. I will add instructions for this later, i might also add a bash script for some systems to do the installation
+The installation script installs three files under the users systemd and enable linger.
+
+## Gunicorn
+
+The default port is 8000. Use it!
