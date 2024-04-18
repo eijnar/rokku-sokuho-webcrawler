@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Webcrawler URL Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        * {
+            font-family: 'Roboto', sans-serif;
+        }
+
+        .band-container {
+            background-color: #f0f0f0;
+            padding: 20px;
+            margin: 20px;
+            border-radius: 10px;
+        }
+
+        .band-header {
+            font-size: 1.2rem;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+
+        .url-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+            padding: 5px;
+            border: 1px solid #ccc;
+        }
+
+        .url-failed {
+            background-color: #790808;
+        }
+
+        .url-input,
+        .class-input {
+            font-size: large;
+            flex-grow: 1;
+            margin-right: 5px;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+
+        .button {
+            padding: 5px 10px;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .button-add {
+            background-color: #2d5a24;
+        }
+
+        .button-delete {
+            background-color: #ff0000;
+        }
+
+        .button:hover {
+            background-color: #773a3a;
+        }
+
+        .failed-indicator {
+            color: red;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .success-indicator {
+            color: green;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1 class="title">Webcrawler URL Manager</h1>
+    <input class="url-input" type="text" id="newBandName" placeholder="Enter Band Name">
+    <button class="button button-add" onclick="addBand()">Add Band</button>
+
+    <div id="bands"></div>
+
+    <script>
+function fetchBands() {
+    $.get('/api/bands', function(bands) {
+        $('#bands').empty(); // Clear existing bands before adding new ones
+        bands.forEach(function(band) {
+            let bandElement = `<div class="band-container">
+                <div class="band-header">
+                    <h3 class="band-name">${band.band_name}</h3>
+                    <button class="button button-delete" onclick="deleteBand(${band.band_id})">Delete Band</button>
+                </div>
+                <div>`;
+            band.urls.forEach(function(url) {
+                const lastUpdated = new Date(url.last_updated);
+                const lastFailed = new Date(url.last_failed);
+                const isFailed = lastFailed > lastUpdated;
+                bandElement += `<div class="url-container ${isFailed ? '' : ''}">
+                    ${isFailed ? '<i class="fas fa-times-circle" style="color: red; margin-right: 5px;"></i>' : '<i class="fas fa-check" style="color: green; margin-right: 5px;"></i>'}
+                    <input type="text" class="url-input" value="${url.url}" id="url_${url.url_id}" onblur="updateUrl(${url.url_id}, this.value, $('#class_${url.url_id}').val())">
+                    <input type="text" class="class-input" value="${url.class_name || ''}" placeholder="Class" id="class_${url.url_id}" onblur="updateUrl(${url.url_id}, $('#url_${url.url_id}').val(), this.value)">
+                    <button class="button button-delete" onclick="deleteUrl(${url.url_id})">Delete URL</button>
+                </div>`;
+            });
+            bandElement += `</div><input type="text" placeholder="Enter URL" class="url-input" id="new_url_${band.band_id}">
+                            <input type="text" placeholder="Enter Class" class="class-input" id="new_class_${band.band_id}">
+                            <button class="button button-add" onclick="addUrl(${band.band_id})">Add URL</button></div>`;
+            $('#bands').prepend(bandElement); // Add the new band at the top of the list
+        });
+    });
+}
+function addBand() {
+    var name = $('#newBandName').val(); // Get the value from the input field
+    if (name.trim() === '') {
+        alert('Please enter a band name.');
+        return;
+    }
+    $.ajax({
+        url: '/api/bands',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ band_name: name }),
+        success: function(band) {
+            $('#newBandName').val(''); // Clear the input field
+            let newBandElement = `<div class="band-container">
+                <div class="band-header">
+                    <h3 class="band-name">${band.band_name}</h3>
+                    <button class="button" onclick="deleteBand(${band.band_id})">Delete Band</button>
+                </div>
+                <div>
+                    <input type="text" placeholder="Enter URL" class="url-input" id="new_url_${band.band_id}">
+                    <input type="text" placeholder="Enter Class" class="class-input" id="new_class_${band.band_id}">
+                    <button class="button" onclick="addUrl(${band.band_id})">Add URL</button>
+                </div></div>`;
+            $('#bands').prepend(newBandElement); // Prepend the newly added band at the top of the list
+        },
+        error: function(xhr, status, error) {
+            console.error("Error adding band:", error);
+            alert("Failed to add band. Error: " + error);
+        }
+    });
+}
+        function updateUrl(url_id, url, class_name) {
+            $.ajax({
+                url: '/api/urls/' + url_id,
+                type: 'PUT',
+                contentType: 'application/json',
+                data: JSON.stringify({ url: url, class_name: class_name }),
+                success: function () {
+                    fetchBands();  // Refresh bands and URLs
+                }
+            });
+        }
+
+        function addUrl(band_id) {
+            var url = $(`#new_url_${band_id}`).val();
+            var className = $(`#new_class_${band_id}`).val();
+            $.post('/api/urls', JSON.stringify({ band_id: band_id, url: url, class_name: className }), function () {
+                fetchBands();  // Refresh bands and URLs
+            }, 'json');
+        }
+
+        function deleteBand(band_id) {
+            $.ajax({
+                url: '/api/bands/' + band_id,
+                type: 'DELETE',
+                success: fetchBands
+            });
+        }
+
+        function deleteUrl(url_id) {
+            $.ajax({
+                url: '/api/urls/' + url_id,
+                type: 'DELETE',
+                success: fetchBands
+            });
+        }
+
+        $(document).ready(function () {
+            fetchBands();
+        });
+    </script>
+
+</body>
+
+</html>

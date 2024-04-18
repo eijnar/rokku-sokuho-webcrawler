@@ -25,9 +25,9 @@ def setup_logging():
             },
             'file': {
                 'class': 'logging.FileHandler',
-                'level': 'DEBUG',
+                'level': 'INFO',
                 'formatter': 'detailed',
-                'filename': 'application.log',
+                'filename': '../logs/webcrawler.log',
                 'mode': 'a'  # append mode
             }
         },

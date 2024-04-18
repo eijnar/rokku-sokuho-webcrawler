@@ -135,7 +135,6 @@ async def get_web_content(url, class_name):
         content = " ".join([element.get_text(strip=True) for element in elements])
     else:
         content = soup.body.get_text(strip=True) if soup.body else ""
-        log.debug(content)
 
     return await compute_content_hash(content)
 
@@ -197,7 +196,7 @@ async def main():
     timing_list = []
     updated_sites = {}
     failed_sites = {}
-    log.info('Webcrawler is starting...')
+    log.info("Initiating sequence. The webcrawler comes online, its electronic eye scanning the vast void of the internet...")
     pool = await create_db_pool()
     try:
         band_data = await fetch_band_urls(pool)
@@ -215,7 +214,7 @@ async def main():
     finally:
         await pool.close()
         log.info('Closed the database connection')
-        log.info('Hibernating.')
+        log.info("The webcrawler has completed its interstellar journey through the digital cosmos. Data assimilated, it powers down into the abyss of silence, waiting to be awakened once more.")
 
 
 if __name__ == '__main__':
