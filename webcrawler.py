@@ -1,214 +1,222 @@
 import os
-import sqlite3
+import asyncio
+import hashlib
+import time
+import statistics
 import smtplib
 from email.mime.text import MIMEText
-import hashlib
-import ezodf
-import requests
-import time
-from tqdm import tqdm
+from email.mime.multipart import MIMEMultipart
 
-# Function to fetch web content (HTML source) from a URL
-def get_web_content(url):
+import asyncpg
+from pyppeteer import launch
+from pyppeteer.errors import TimeoutError
+from concurrent.futures import ThreadPoolExecutor
+from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+
+from logging_config import setup_logging, get_logger
+
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Setup environment variables
+DB_USER = os.getenv('DB_USER')
+DB_PASSWORD = os.getenv('DB_PASSWORD')
+DB_NAME = os.getenv('DB_NAME')
+DB_HOST = os.getenv('DB_HOST')
+DB_PORT = os.getenv('DB_PORT')
+
+setup_logging()
+log = get_logger(__name__)
+
+
+async def create_db_pool():
+    log.debug("Creating database connection pool.")
     try:
-        response = requests.get(url)
-        response.raise_for_status()  # Raise an exception for HTTP errors (e.g., 404)
-
-        # Check if the response content is not empty
-        if response.text:
-            return response.text  # Return the HTML source code
-        else:
-            print(f"Content from {url} is empty.")
-            return None
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching content from {url}: {e}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-    
-    return None  # Return None in case of an error or unsuccessful request
-
-# Function to read web addresses from an ODS file, skipping the first row (header)
-def read_web_addresses_from_ods(ods_file):
-    web_addresses = []
-    doc = ezodf.opendoc(ods_file)
-
-    # Assuming data is in the first sheet
-    sheet = doc.sheets[0]
-
-    # Start from the second row (row index 1)
-    for row_index, row in enumerate(sheet.rows()):
-        if row_index == 0:  # Skip the first row (header)
-            continue
-
-        name = row[0].value
-        urls = [cell.value for cell in row[1:]]
-        
-        # Filter out None or empty URLs
-        valid_urls = [url for url in urls if url is not None and url.strip() != '']
-        
-        if valid_urls:
-            web_addresses.append((name, valid_urls))
-    
-    return web_addresses
-
-# Function to compute the hash of web content
-def compute_content_hash(content):
-    return hashlib.sha256(content.encode()).hexdigest()
-
-# Function to create the database if it doesn't exist
-def create_database(database_file):
-    conn = sqlite3.connect(database_file)
-    cursor = conn.cursor()
-
-    # Create a table to store web content information
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS web_content (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            url TEXT NOT NULL,
-            hash TEXT NOT NULL,
-            timestamp INTEGER NOT NULL
+        return await asyncpg.create_pool(
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME,
+            host=DB_HOST,
+            port=DB_PORT
         )
-    ''')
-
-    conn.commit()
-    conn.close()
-
-# Function to check for changes in web content and notify if changes are found
-def send_failed_sites_summary(email_config, failed_sites_with_urls):
-    subject = "Failed Sites Summary"
-    body = "The following sites have failed to retrieve content:\n\n"
-    
-    for site_name, urls in failed_sites_with_urls:
-        body += f"- {site_name}\n"
-        for url in urls:
-            body += f"  - {url}\n"
-
-    msg = MIMEText(body)
-    msg['Subject'] = subject
-    msg['From'] = email_config['custom_sender_email']
-    msg['To'] = email_config['recipient_email']
-
-    try:
-        smtp_server = smtplib.SMTP_SSL(email_config['smtp_server'], email_config['smtp_port'])
-        smtp_server.login(email_config['custom_sender_email'], email_config['sender_password'])
-        smtp_server.sendmail(email_config['custom_sender_email'], [email_config['recipient_email']], msg.as_string())
-        smtp_server.quit()
     except Exception as e:
-        print(f"Error sending email: {e}")
+        log.error(f"Failed to create database connection pool: {e}")
+        raise
 
 
-# Function to send an email summary of changed sites, their URLs, and timestamps
-def send_changed_sites_summary(email_config, changed_sites_with_urls_and_timestamp):
-    subject = "Changed Sites Summary"
-    body = "The following sites have changed:\n\n"
+async def fetch_band_urls(pool):
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT band.band_id, band.band_name, band_url.url_id, band_url.url, band_url.class_name "
+            "FROM band "
+            "JOIN band_url ON band.band_id = band_url.band_id;"
+        )
+        band_data = {}
+        for row in rows:
+            if row['band_id'] not in band_data:
+                band_data[row['band_id']] = {
+                    'band_name': row['band_name'],
+                    'urls': []
+                }
+            band_data[row['band_id']]['urls'].append({
+                'url_id': row['url_id'],
+                'url': row['url'],
+                'class_name': row['class_name']  # Include class_name in the data structure
+            })
+        return band_data
 
-    for site_name, urls, timestamp in changed_sites_with_urls_and_timestamp:
-        body += f"- {site_name} (Last Change: {timestamp})\n"
-        for url in urls:
-            body += f"  - {url}\n"
 
-    msg = MIMEText(body)
-    msg['Subject'] = subject
-    msg['From'] = email_config['custom_sender_email']
-    msg['To'] = email_config['recipient_email']
+async def process_band(band_id, band_info, pool, timing_list, updated_sites, failed_sites):
+    log.info(f"Processing {band_info['band_name']}...")
+    for url_info in band_info['urls']:
+        await process_url(band_id, band_info['band_name'], url_info, pool, timing_list, updated_sites, failed_sites)
 
+
+async def process_url(band_id, band_name, url_info, pool, timing_list, updated_sites, failed_sites):
+    start_time = time.time()
     try:
-        smtp_server = smtplib.SMTP_SSL(email_config['smtp_server'], email_config['smtp_port'])
-        smtp_server.login(email_config['custom_sender_email'], email_config['sender_password'])
-        smtp_server.sendmail(email_config['custom_sender_email'], [email_config['recipient_email']], msg.as_string())
-        smtp_server.quit()
-    except Exception as e:
-        print(f"Error sending email: {e}")
-
-# Function to check for changes in web content and notify if changes are found
-def check_for_changes_and_notify(ods_file, database_file, email_config):
-    # Check if the database file exists, and if not, create it
-    if not os.path.exists(database_file):
-        create_database(database_file)
-
-    web_addresses = read_web_addresses_from_ods(ods_file)
-    conn = sqlite3.connect(database_file)
-    cursor = conn.cursor()
-
-    changed_sites = []  # Store sites with changed content, their URLs, and the timestamp
-    failed_sites = []  # Store sites with failed URLs as tuples
-
-    print("Starting the crawler...")
-    start_time = time.time()  # Record the start time
-
-    for name, urls in web_addresses:
-        site_changed = False
-        changed_urls = []  # Store URLs that have changed
-        failed_urls = []  # Store URLs that have failed
-
-        # print(f"Processing site: {name}")
-
-        for url_index, url in enumerate(tqdm(urls, desc=f"Band: {name}", ncols=100 , ascii=' >=', unit="url")):
-            current_hash = None  # Initialize current_hash here
-
-            current_content = get_web_content(url)
-
-            if current_content is not None:
-                current_hash = compute_content_hash(current_content)
+        new_hash = await get_web_content(url_info['url'], url_info['class_name'])
+        async with pool.acquire() as conn:
+            old_hash = await conn.fetchval(
+                "SELECT hash_value FROM band_url WHERE url_id = $1", url_info['url_id']
+            )
+            if new_hash != old_hash:
+                log.info(f"Content has changed for URL {url_info['url']}. Updating database...")
+                await conn.execute(
+                    "UPDATE band_url SET hash_value = $1, last_updated = (NOW() AT TIME ZONE 'Europe/Stockholm') WHERE url_id = $2",
+                    new_hash, url_info['url_id']
+                )
+                if band_name not in updated_sites:
+                    updated_sites[band_name] = []
+                updated_sites[band_name].append(url_info['url'])
             else:
-                print(f"Failed to retrieve content from {url}. Skipping...")
-                failed_urls.append(url)
-                continue
+                await conn.execute(
+                    "UPDATE band_url SET last_updated = (NOW() AT TIME ZONE 'Europe/Stockholm') WHERE url_id = $1",
+                    url_info['url_id']
+                )
+    except Exception as e:
+        log.error(f"Failed to process URL {url_info['url']}: {str(e)}")
+        if band_name not in failed_sites:
+            failed_sites[band_name] = []
+        failed_sites[band_name].append(url_info['url'])
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE band_url SET last_failed = (NOW() AT TIME ZONE 'Europe/Stockholm') WHERE url_id = $1",
+                url_info['url_id']
+            )
+    duration = time.time() - start_time
+    timing_list.append(duration)
 
-            cursor.execute("SELECT hash, timestamp FROM web_content WHERE name=? AND url=?", (name, url))
-            previous_data = cursor.fetchone()
 
-            if previous_data is not None:  # Check if previous_data is not None
-                previous_hash, previous_timestamp = previous_data
+async def compute_content_hash(content):
+    return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
-                if current_hash != previous_hash:
-                    site_changed = True
-                    changed_urls.append(url)
 
-            cursor.execute("REPLACE INTO web_content (name, url, hash, timestamp) VALUES (?, ?, ?, ?)", (name, url, current_hash, int(time.time())))
-            conn.commit()
+async def get_web_content(url, class_name):
+    try:
+        browser = await launch(headless=True)
+        page = await browser.newPage()
+        try:
+            await page.goto(url, options={'timeout': 60000})
+            html_content = await page.content()
+        except TimeoutError as e:
+            log.error(f"Timeout when accessing {url}: {str(e)}")
+            return None  # Decide if you need to return a specific value here
+        finally:
+            await page.close()
+    finally:
+        await browser.close()
 
-        if site_changed:
-            changed_sites.append((name, urls, time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))  # Include timestamp in the changed_sites tuple
+    soup = BeautifulSoup(html_content, 'html.parser')
+    if class_name:
+        elements = soup.find_all(class_=class_name)
+        content = " ".join([element.get_text(strip=True) for element in elements])
+    else:
+        content = soup.body.get_text(strip=True) if soup.body else ""
+        log.debug(content)
 
-        if failed_urls:
-            failed_sites.append((name, failed_urls))  # Store both the site name and failed URLs as a tuple
+    return await compute_content_hash(content)
 
-        if changed_urls:  # Print only if there are changed URLs for this site
-            print(f"Changed URLs for band: {name}")
-            for changed_url in changed_urls:
-                print(f"\t- {changed_url}")
 
-        #print(f"Finished processing site: {name}")
+def send_email(subject, body):
+    sender_email = os.getenv('MAIL_SENDER')
+    sender_password = os.getenv('MAIL_PASSWORD')
+    recipient = os.getenv('MAIL_TO')
+    smtp_url = os.getenv('MAIL_SMTP')
+    smtp_port = os.getenv('MAIL_PORT')
+    
+    # Create the MIME structure
+    message = MIMEMultipart()
+    message["From"] = f"Rokku-Sokuho webcrawler <{sender_email}>"
+    message["To"] = recipient
+    message["Subject"] = subject
+    message.attach(MIMEText(body, "plain"))
+    
+    try:
+        # Connect to server using secure context
+        with smtplib.SMTP_SSL(smtp_url, smtp_port) as server:
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, recipient, message.as_string())
+            log.info("Email sent successfully")
+    except Exception as e:
+        log.error(f"Failed to send email: {str(e)}")
 
-    conn.close()
+def prepare_email_content(updated_sites, failed_sites):
+    email_content = []
+    if updated_sites:
+        updated_message = ["Sites that are updated:\n"]
+        for band, urls in updated_sites.items():
+            updated_message.append(f"{band}")
+            for url in urls:
+                updated_message.append(f" - {url}")
+            updated_message.append("\n")
+        updated_content = "\n".join(updated_message)
+        email_content.append(("Updated Sites", updated_content))
 
     if failed_sites:
-        send_failed_sites_summary(email_config, failed_sites)  # Send failed summary with URLs
+        failed_message = ["Sites that failed to update:\n"]
+        for band, urls in failed_sites.items():
+            failed_message.append(f"{band}")
+            for url in urls:
+                failed_message.append(f" - {url}")
+            failed_message.append("\n")
+        failed_content = "\n".join(failed_message)
+        email_content.append(("Failed Sites", failed_content))
 
-    if changed_sites:
-        send_changed_sites_summary(email_config, changed_sites)  # Send changed summary with URLs and timestamp
+    return email_content
 
-    end_time = time.time()  # Record the end time
-    execution_time = end_time - start_time  # Calculate execution time
+async def send_email_async(subject, body):
+    loop = asyncio.get_running_loop()
+    with ThreadPoolExecutor() as pool:
+        await loop.run_in_executor(pool, send_email, subject, body)
 
-    print("Crawler completed.")
-    print(f"Execution time: {execution_time:.2f} seconds")  # Print execution time
+async def main():
+    total_start_time = time.time()
+    timing_list = []
+    updated_sites = {}
+    failed_sites = {}
+    log.info('Webcrawler is starting...')
+    pool = await create_db_pool()
+    try:
+        band_data = await fetch_band_urls(pool)
+        tasks = [process_band(band_id, info, pool, timing_list, updated_sites, failed_sites) for band_id, info in band_data.items()]
+        await asyncio.gather(*tasks)
+        total_duration = time.time() - total_start_time
 
-if __name__ == "__main__":
-    ods_file = "webcrawler.ods"  # Replace with the path to your ODS file
-    database_file = "web_content.db"  # Replace with the desired SQLite database filename
+        if timing_list:
+            median_time = statistics.median(timing_list)
+            log.info(f"Median processing time per page: {median_time:.2f} seconds.")
+        log.info(f'Total execution time: {total_duration:.2f} seconds.')
+        emails = prepare_email_content(updated_sites, failed_sites)
+        for subject, body in emails:
+            await send_email_async(subject, body)
+    finally:
+        await pool.close()
+        log.info('Closed the database connection')
+        log.info('Hibernating.')
 
-    email_config = {
-        # Email configuration
-        'custom_sender_email': 'email@domain.com',
-        'sender_password': 'password_of_importance',
-        'recipient_email': 'reciever_of_news@domain.com',
-        'smtp_server': 'smtp.domain.com',  # Update for your email provider
-        'smtp_port': 465,  # Update for your email provider
-    }
 
-    # You can remove the sleep since you're using systemd timer
-
-    check_for_changes_and_notify(ods_file, database_file, email_config)
+if __name__ == '__main__':
+    asyncio.run(main())
