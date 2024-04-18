@@ -8,21 +8,9 @@ Currently you need to create your own environment for the script, this can be do
 
 Enter the new virtual environment by running `source .venv/bin/activate` and install the requirements with `pip install -r requirements.txt`
 
-After that you should be able to run the script.
+After that you should be able to run both the crawler and the flask-frontend.
 
-## Configuration
-But before you start the script for the first time you should do some configuration. 
 
-### Spreadsheet (.ods)
-This file should be edited with the actual sites you need to monitor. It's currently a OpenDocuments spreadsheet.
-The one provided only has some examples with *one address setup for failure and one that is always changing*. 
-
-### SMTP server
-You need to provide email settings in the `email_settings {}` bracket. The username is currently named `custom_sender_email` and the password is `sender_password`. 
-
-Remember to change the `recipient_email` to the adress you would like to have the mail delivered.
-
-_Currently only SSL accepting smtp servers are supported_
 
 
 ### Systemd

@@ -1,0 +1,12 @@
+[Unit]
+Description=Rokku-Sokuho Webcrawler backend
+
+[Service]
+WorkingDirectory=/home/johan/rokku-sokuho-webcrawler/webcrawler
+Type=simple
+ExecStart=/home/johan/rokku-sokuho-webcrawler/.venv/bin/python3 /home/johan/rokku-sokuho-webcrawler/webcrawler/webcrawler.py
+User=johan
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

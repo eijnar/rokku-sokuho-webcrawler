@@ -1,9 +1,0 @@
-[Unit]
-Description=Rokku-Sokuho Webcrawler service
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/python3 /path/to/webcrawler.py
-
-[Install]
-WantedBy=multi-user.target

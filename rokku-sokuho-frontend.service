@@ -1,0 +1,12 @@
+[Unit]
+Description=Gunicorn server for Rokku-Sokuho Frontend
+
+[Service]
+WorkingDirectory=%h/rokku-sokuho/frontend/
+Type=simple
+ExecStart=%h/rokku-sokuho/venv/bin/gunicorn --workers 2 --bind 0.0.0.0:8000 app:app
+User=%u
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
