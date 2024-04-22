@@ -1,0 +1,203 @@
+@keyframes pulsate {
+    0% {
+        box-shadow: 0 0 5px rgba(255, 0, 0, 0.75);
+    }
+
+    50% {
+        box-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
+    }
+
+    100% {
+        box-shadow: 0 0 5px rgba(255, 0, 0, 0.75);
+    }
+}
+
+.band-container {
+    background: #f0f0f0;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+    margin: 20px;
+    padding: 20px;
+    display: flex;
+    flex-direction: row;
+    /* Align children in a row */
+    align-items: center;
+    /* Align children vertically in the center */
+    border-radius: 10px;
+    border: 1px solid gray;
+}
+
+.band-details {
+    flex: 1;
+    /* Allows the band details to fill available space but can be adjusted */
+    display: flex;
+    flex-direction: column;
+    /* Stack name and delete button vertically */
+    justify-content: space-between;
+    /* Distribute space between name and delete button */
+    height: 100%;
+}
+
+.band-actions {
+    flex: 4;
+    /* Allows the URL table to take twice the space of band details */
+    padding-left: 20px;
+    /* Adds some space between band details and URL table */
+}
+
+.band-delete-button {
+    align-self: flex-start;
+    /* Aligns the button to the end of the band-details area */
+    margin-top: auto;
+    /* Pushes the button to the bottom if band-details uses column flex-direction */
+    cursor: pointer;
+    border: none;
+    background: transparent;
+}
+
+.band-name {
+    flex-grow: 1;
+    /* Ensures the name uses all available space in its container */
+}
+
+
+.table-full-width {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table-full-width,
+.table-full-width th,
+.table-full-width td {
+    border: none;
+    padding: 8px;
+    /* Adjust padding as needed */
+}
+
+.table-cell {
+    padding: 4px;
+    /* Provides padding inside cells */
+    vertical-align: middle;
+    /* Centers content vertically */
+    height: 100%;
+    /* Set a specific height for all cells */
+    text-align: left;
+    /* Align text to the left */
+    margin: 0px;
+}
+
+/* Specific styles for the status cell */
+.table-status {
+    display: flex;
+    justify-content: center;
+    /* Center horizontally */
+    align-items: center;
+    /* Center vertically */
+    height: 35px;
+    /* Take up full height of the cell */
+    width: 100%;
+    /* Take up full width for consistency */
+}
+
+.table-status-dot {
+    height: 12px;
+    width: 12px;
+    border-radius: 50%;
+    background-color: inherit;
+    /* Inherit the background color from the parent */
+    margin: auto;
+    /* Center the dot if needed */
+}
+
+.table-action-buttons {
+    display: flex;  /* Makes the table cell a flex container */
+    justify-content: flex-end;  /* Aligns child content to the right */
+    align-items: center;  /* Vertically centers the content in the cell */
+    width: 100%;  /* Ensures the cell takes full available width */
+}
+
+
+.table-status-ok {
+    background-color: green;
+    /* Green dot for OK status */
+}
+
+.table-status-fail {
+    background-color: red;
+    /* Red dot for failure status */
+    animation: pulsate 1.5s infinite ease-in-out;
+}
+
+.table-header {
+    padding: 8px;
+    background-color: #ffffff;
+}
+
+.table-striped-row:nth-child(odd) {
+    background-color: #f9f9f9;
+}
+
+.table-striped-row:nth-child(even) {
+    background-color: #ffffff;
+}
+
+.table-input {
+    width: calc(100% - 16px);
+    /* Subtract padding to fit perfectly */
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 6px;
+    box-sizing: border-box;
+    /* Ensures the padding and border are included in the total width */
+}
+
+.icon-button {
+    cursor: pointer;
+    background: none;
+    border: none;
+    color: green;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-button:hover {
+    color: #000;
+    /* Darker color on hover for better interaction feedback */
+}
+
+/* Add styles for icons inside buttons for a uniform size and margin */
+.icon-button svg {
+    width: 16px;
+    height: 16px;
+}
+
+.action-buttons {
+    display: flex;
+    justify-content: flex-end;  /* Aligns items to the right (end) */
+    width: 80px;  /* Adjust width as necessary */
+    padding-right: 20px;
+}
+
+
+.icon-button {
+    flex: 1;
+    /* Each button will take equal space */
+    cursor: pointer;
+    background: none;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.delete-button {
+    justify-content: flex-end;
+    /* Aligns the delete button to the right */
+}
+
+.edit-button,
+.save-button,
+.cancel-button {
+    justify-content: flex-start;
+    /* Aligns the edit/save/cancel button to the left */
+}
