@@ -1,6 +1,6 @@
 # app/main.py
 
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
 from .api.endpoints import bands, urls
 from .database import Base, engine
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,8 +17,11 @@ app.add_middleware(
 
 Base.metadata.create_all(bind=engine)
 
-app.include_router(bands.router)
-app.include_router(urls.router)
+base_router = APIRouter(prefix="/v1")
+base_router.include_router(bands.router)
+base_router.include_router(urls.router)
+
+app.include_router(base_router)
 
 if __name__ == "__main__":
     import uvicorn

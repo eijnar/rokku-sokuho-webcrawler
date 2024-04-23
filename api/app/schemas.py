@@ -44,7 +44,6 @@ class BandUpdate(BaseModel):
 class Band(BaseModel):
     band_id: int
     band_name: str
-    urls: Optional[List[URLDisplay]]  # Use URLDisplay for full URL details
 
     class Config:
         orm_mode = True

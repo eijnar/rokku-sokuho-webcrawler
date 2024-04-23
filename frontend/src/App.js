@@ -1,14 +1,15 @@
 import React from 'react';
-import BandManager from './components/BandManager';
+import { BandProvider } from './contexts/BandContext';
+import BandList from './components/BandList/BandList';
 
-function App() {
+const App = () => {
   return (
-    <div className="App">
-      <header className="App-header">
-        <h1>Band and URL Manager</h1>
-      </header>
-      <BandManager />
-    </div>
+    <BandProvider>
+      <div className="App">
+        <h1>Band Directory</h1>
+        <BandList />
+      </div>
+    </BandProvider>
   );
 }
 
